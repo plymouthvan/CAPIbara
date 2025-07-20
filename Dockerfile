@@ -9,10 +9,17 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
-# Copy application code
-COPY . .
+# Copy core files
+COPY index.js ./
+COPY package*.json ./
+COPY src/ ./src/
 
-# Create templates directory
+# Templates and routes should be mounted in production, not baked in
+# You may COPY templates/ and routes.json here for local dev/testing
+# COPY templates/ ./templates/
+# COPY routes.json ./routes.json
+
+# Create templates directory for runtime mounting
 RUN mkdir -p /app/templates
 
 # Expose port (configurable via PORT env var, defaults to 8080)
