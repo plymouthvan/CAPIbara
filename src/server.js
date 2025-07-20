@@ -1,11 +1,22 @@
 const express = require('express');
 const config = require('./config');
+const router = require('./router');
+const debugLogger = require('./debug');
 
 class Server {
   constructor() {
     this.app = express();
     this.setupMiddleware();
     this.setupRoutes();
+    this.initializeComponents();
+  }
+
+  initializeComponents() {
+    // Initialize debug logger
+    debugLogger.initialize();
+    
+    // Initialize router
+    router.initialize();
   }
 
   setupMiddleware() {
@@ -64,18 +75,29 @@ class Server {
   }
 
   handleEventCollection(req, res) {
-    // TODO: Implement in Phase 4
-    res.status(501).json({ error: 'Not implemented yet' });
+    router.processRequest(req, res);
   }
 
   handleDebugRequest(req, res) {
-    // TODO: Implement in Phase 4
-    res.status(501).json({ error: 'Not implemented yet' });
+    try {
+      const entries = debugLogger.getEntries();
+      const stats = debugLogger.getStats();
+      
+      res.json({
+        stats: stats,
+        entries: entries
+      });
+    } catch (error) {
+      console.error('Debug endpoint error:', error);
+      const errorResponse = config.isDebugLogging() 
+        ? { error: error.message }
+        : { error: 'Internal Server Error' };
+      res.status(500).json(errorResponse);
+    }
   }
 
   handleDryRunRequest(req, res) {
-    // TODO: Implement in Phase 5
-    res.status(501).json({ error: 'Not implemented yet' });
+    router.processDryRun(req, res);
   }
 
   /**

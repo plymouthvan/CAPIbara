@@ -1,0 +1,12 @@
+{
+  "client_id": "{{client_id}}",
+  "events": [
+    {
+      "name": "{{events.0.name}}",
+      "params": {
+        "value": "{{events.0.params.value}}",
+        "currency": "{{events.0.params.currency || 'USD'}}"
+      }
+    }
+  ]
+}

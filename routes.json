@@ -1,0 +1,15 @@
+{
+  "routes": [
+    {
+      "name": "test-route",
+      "event_match": "*",
+      "target_url": "https://httpbin.org/post",
+      "method": "POST",
+      "template": "meta.json",
+      "auth": {
+        "type": "apikey",
+        "key": "test-key-123"
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "event_name": "{{events.0.name}}",
+  "event_time": "{{meta.timestamp}}",
+  "action_source": "website",
+  "event_source_url": "{{page_location}}",
+  "user_data": {
+    "client_user_agent": "{{meta.user_agent}}",
+    "client_ip_address": "{{meta.ip}}",
+    "em": "{{user_properties.email}}"
+  },
+  "custom_data": {
+    "value": "{{events.0.params.value}}",
+    "currency": "{{events.0.params.currency || 'USD'}}"
+  }
+}

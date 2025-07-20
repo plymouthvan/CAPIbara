@@ -1,0 +1,54 @@
+{
+  "routes": [
+    {
+      "name": "send-to-meta",
+      "event_match": "purchase",
+      "target_url": "https://graph.facebook.com/v18.0/{{META_PIXEL_ID}}/events",
+      "method": "POST",
+      "template": "meta.json",
+      "priority": 1,
+      "auth": {
+        "type": "apikey",
+        "key": "{{MY_PRIVATE_KEY}}"
+      },
+      "headers": {
+        "Authorization": "Bearer {{META_ACCESS_TOKEN}}"
+      }
+    },
+    {
+      "name": "send-to-ga4",
+      "event_match": "purchase",
+      "target_url": "https://www.google-analytics.com/mp/collect?measurement_id={{GA4_MEASUREMENT_ID}}&api_secret={{GA4_API_SECRET}}",
+      "method": "POST",
+      "template": "ga4.json",
+      "priority": 2,
+      "multi": true,
+      "auth": {
+        "type": "whitelist",
+        "origins": ["https://example.com", "https://www.example.com"]
+      }
+    },
+    {
+      "name": "forward-to-n8n",
+      "event_match": "*",
+      "target_url": "{{N8N_WEBHOOK_URL}}",
+      "method": "POST",
+      "priority": 10,
+      "auth": {
+        "type": "ip_whitelist",
+        "allowed_ips": ["203.0.113.1", "203.0.113.2"]
+      }
+    },
+    {
+      "name": "catch-all-fallback",
+      "event_match": "*",
+      "target_url": "{{ZAPIER_WEBHOOK_URL}}",
+      "method": "POST",
+      "fallback": true,
+      "auth": {
+        "type": "apikey",
+        "key": "{{WEBHOOK_SECRET}}"
+      }
+    }
+  ]
+}
