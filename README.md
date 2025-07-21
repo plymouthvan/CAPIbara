@@ -39,6 +39,34 @@ CAPIbara/
 
 ## 🚀 Quick Start
 
+### Option 1: Automated Setup (Recommended)
+
+For the fastest setup using Docker, download and run the automated setup script:
+
+```bash
+# Download the setup script
+curl -O https://raw.githubusercontent.com/plymouthvan/CAPIbara/master/setup-capibara.sh
+
+# Make it executable and run
+chmod +x setup-capibara.sh
+./setup-capibara.sh
+```
+
+The script will:
+- Create a `capibara` directory with all necessary files
+- Pull the latest Docker image from GitHub Container Registry
+- Generate example configuration files (.env, routes.json, templates)
+- Create a docker-compose.yml for easy management
+- Provide clear instructions for starting the service
+
+After the script completes, simply run:
+```bash
+cd capibara
+docker compose up -d
+```
+
+### Option 2: Manual Setup
+
 1. **Clone and install dependencies:**
    ```bash
    git clone https://github.com/plymouthvan/CAPIbara.git
