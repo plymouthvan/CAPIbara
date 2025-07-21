@@ -347,6 +347,125 @@ If `DEBUG_MAX_ENTRIES` < 1, debug log retention is disabled. If greater than 100
 
   > **Note:** Runtime errors loading templates should not crash the server but must be logged in `/debug` with enough detail to diagnose the issue.
 
+## 📊 Server Logs & Observability
+
+CAPIbara provides comprehensive logging capabilities for production monitoring and debugging.
+
+### 🗂️ File Logging
+
+CAPIbara supports persistent file logging with structured JSON format for production observability:
+
+- **Log Location**: `/var/log/capibara/capibara.log` (production) or `./logs/capibara.log` (local)
+- **Format**: Structured JSON with request correlation
+- **Rotation**: Automatic rotation at 1MB with 3 file retention
+- **Request Correlation**: Each request gets a UUID v4 for tracing across systems
+
+#### Configuration
+
+Enable file logging via environment variables:
+
+```env
+FILE_LOGGING_ENABLED=true
+FILE_LOG_MAX_SIZE=1048576    # 1MB in bytes
+FILE_LOG_MAX_FILES=3         # Number of rotated files to keep
+LOG_DIRECTORY=/var/log/capibara  # Custom log directory (optional)
+```
+
+#### Log Entry Structure
+
+Each log entry contains comprehensive request information:
+
+```json
+{
+  "level": "info",
+  "message": {
+    "timestamp": "2025-07-21T02:37:10.334Z",
+    "request_id": "5f4f3ee5-58c9-44a3-be8f-fb664e5a9966",
+    "source_ip": "::1",
+    "source_path": "/g/collect",
+    "route_name": "test-route",
+    "auth_status": "success",
+    "processing_status": "success",
+    "target_url": "https://httpbin.org/post",
+    "http_status": 200,
+    "duration_ms": 270,
+    "error_message": null,
+    "error_code": null,
+    "user_agent": "curl/8.7.1",
+    "request_body": {...},
+    "transformed_payload": {...}
+  },
+  "timestamp": "2025-07-21T02:37:10.334Z"
+}
+```
+
+#### Log Field Descriptions
+
+- **`request_id`**: UUID v4 for request correlation across logs and systems
+- **`auth_status`**: Authentication result (`success`, `auth_failed`, `validation_failed`, `no_match`)
+- **`processing_status`**: Route processing result (`success`, `passthrough`, `auth_failed`, `validation_error`, `forwarding_error`, `unmatched`)
+- **`duration_ms`**: Request processing duration in milliseconds
+- **`error_code`**: Specific error code (e.g., `ECONNABORTED`, `HTTP_404`, `NO_RESPONSE`)
+- **`request_body`**: Original request payload (only logged when `DEBUG_LOGGING=true`)
+
+#### Status Code Meanings
+
+- **`success`**: Template processed and forwarded successfully
+- **`passthrough`**: Raw payload forwarded successfully (no template)
+- **`auth_failed`**: API key/origin/IP authentication failed
+- **`validation_error`**: Payload validation failed (missing events[0].name)
+- **`forwarding_error`**: HTTP request to target failed
+- **`unmatched`**: No route matched the event name
+
+### 🔍 Console Logging
+
+In addition to file logging, CAPIbara provides real-time console logging:
+
+```
+2025-07-21T02:37:10.064Z [5f4f3ee5-58c9-44a3-be8f-fb664e5a9966] POST /g/collect from ::1
+[2025-07-21T02:37:10.000Z] SUCCESS test-route (270ms) -> https://httpbin.org/post
+```
+
+Each console log entry includes:
+- Timestamp and request ID for correlation
+- Request method, path, and source IP
+- Processing result with route name, duration, and target URL
+
+### 🧪 Test Mode Logging
+
+Enable enhanced logging for development and testing:
+
+```env
+CAPI_TEST_MODE=true
+DEBUG_LOGGING=true
+```
+
+Test mode provides additional logging detail and preserves request bodies for debugging.
+
+### 📈 Log Monitoring
+
+For production monitoring, you can:
+
+1. **Tail logs in real-time**:
+   ```bash
+   tail -f /var/log/capibara/capibara.log | jq .
+   ```
+
+2. **Search for specific request IDs**:
+   ```bash
+   grep "5f4f3ee5-58c9-44a3-be8f-fb664e5a9966" /var/log/capibara/capibara.log
+   ```
+
+3. **Filter by status**:
+   ```bash
+   jq 'select(.message.processing_status == "auth_failed")' /var/log/capibara/capibara.log
+   ```
+
+4. **Monitor error rates**:
+   ```bash
+   jq 'select(.message.http_status >= 400)' /var/log/capibara/capibara.log
+   ```
+
 ## 🚀 Deployment & CLI Usage
 
 You can run CAPIbara either via Node directly or using Docker (recommended).
