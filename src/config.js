@@ -7,6 +7,10 @@ class Config {
     this.debugLogging = false;
     this.debugMaxEntries = 100;
     this.port = 8080;
+    this.fileLoggingEnabled = false;
+    this.fileLogMaxSize = 1048576; // 1MB
+    this.fileLogMaxFiles = 3;
+    this.testMode = false;
   }
 
   /**
@@ -24,12 +28,14 @@ class Config {
     
     this.debugLogging = process.env.DEBUG_LOGGING === 'true';
     this.port = parseInt(process.env.PORT) || 8080;
+    this.testMode = process.env.CAPI_TEST_MODE === 'true';
+    this.fileLoggingEnabled = process.env.FILE_LOGGING_ENABLED === 'true';
     
-    // Validate DEBUG_MAX_ENTRIES
-    if (process.env.DEBUG_MAX_ENTRIES !== undefined) {
-      const maxEntries = parseInt(process.env.DEBUG_MAX_ENTRIES);
+    // Validate DEBUG_MAX_ENTRIES (separate from file logging)
+    if (process.env.DEBUG_LOG_MAX !== undefined) {
+      const maxEntries = parseInt(process.env.DEBUG_LOG_MAX);
       if (isNaN(maxEntries)) {
-        throw new Error('DEBUG_MAX_ENTRIES must be a valid integer');
+        throw new Error('DEBUG_LOG_MAX must be a valid integer');
       }
       if (maxEntries < 0) {
         this.debugMaxEntries = 0; // Disable debug retention
@@ -38,6 +44,36 @@ class Config {
       } else {
         this.debugMaxEntries = maxEntries;
       }
+    } else if (process.env.DEBUG_MAX_ENTRIES !== undefined) {
+      // Backward compatibility
+      const maxEntries = parseInt(process.env.DEBUG_MAX_ENTRIES);
+      if (isNaN(maxEntries)) {
+        throw new Error('DEBUG_MAX_ENTRIES must be a valid integer');
+      }
+      if (maxEntries < 0) {
+        this.debugMaxEntries = 0;
+      } else if (maxEntries > 1000) {
+        this.debugMaxEntries = 1000;
+      } else {
+        this.debugMaxEntries = maxEntries;
+      }
+    }
+    
+    // File logging configuration
+    if (process.env.FILE_LOG_MAX_SIZE !== undefined) {
+      const maxSize = parseInt(process.env.FILE_LOG_MAX_SIZE);
+      if (isNaN(maxSize) || maxSize <= 0) {
+        throw new Error('FILE_LOG_MAX_SIZE must be a positive integer');
+      }
+      this.fileLogMaxSize = maxSize;
+    }
+    
+    if (process.env.FILE_LOG_MAX_FILES !== undefined) {
+      const maxFiles = parseInt(process.env.FILE_LOG_MAX_FILES);
+      if (isNaN(maxFiles) || maxFiles <= 0) {
+        throw new Error('FILE_LOG_MAX_FILES must be a positive integer');
+      }
+      this.fileLogMaxFiles = maxFiles;
     }
   }
 
@@ -220,6 +256,22 @@ class Config {
 
   getPort() {
     return this.port;
+  }
+
+  isFileLoggingEnabled() {
+    return this.fileLoggingEnabled;
+  }
+
+  getFileLogMaxSize() {
+    return this.fileLogMaxSize;
+  }
+
+  getFileLogMaxFiles() {
+    return this.fileLogMaxFiles;
+  }
+
+  isTestMode() {
+    return this.testMode;
   }
 }
 

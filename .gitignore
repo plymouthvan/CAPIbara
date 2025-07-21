@@ -63,3 +63,9 @@ Thumbs.db
 
 # Test artifacts
 test-results/
+
+# CAPIbara log files
+logs/
+
+# Development and testing files
+dev/

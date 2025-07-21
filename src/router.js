@@ -3,6 +3,7 @@ const config = require('./config');
 const auth = require('./auth');
 const templateEngine = require('./template-engine');
 const debugLogger = require('./debug');
+const fileLogger = require('./file-logger');
 const { 
   isValidGA4Payload, 
   getEventName, 
@@ -50,7 +51,22 @@ class Router {
       // Validate payload structure
       if (!isValidGA4Payload(payload)) {
         const error = 'Invalid payload: missing events[0].name';
+        const duration = Date.now() - startTime;
+        
         debugLogger.logRequest(req, payload, null, null, 'validation_error', error);
+        fileLogger.logRequest(
+          req.request_id,
+          req,
+          payload,
+          null,
+          null,
+          'validation_failed',
+          'validation_error',
+          400,
+          duration,
+          error
+        );
+        
         return res.status(400).json({ error: config.isDebugLogging() ? error : 'Bad Request' });
       }
 
@@ -143,6 +159,8 @@ class Router {
       // Authenticate request
       const authResult = auth.authenticate(req, route.auth);
       if (!authResult.success) {
+        const duration = Date.now() - startTime;
+        
         if (config.isDebugLogging()) {
           auth.logAuthAttempt(req, authResult, route.name || 'unnamed');
         }
@@ -154,7 +172,20 @@ class Router {
           route.target_url,
           'auth_failed',
           authResult.error,
-          Date.now() - startTime
+          duration
+        );
+        
+        fileLogger.logRequest(
+          req.request_id,
+          req,
+          payload,
+          route.name || 'unnamed',
+          route.target_url,
+          'auth_failed',
+          'auth_failed',
+          401,
+          duration,
+          authResult.error
         );
         
         return { success: false, error: authResult.error, route: route.name };
@@ -176,6 +207,7 @@ class Router {
 
       // Send to target URL
       const httpResult = await this.sendToTarget(route, transformedPayload);
+      const duration = Date.now() - startTime;
       
       if (!httpResult.success) {
         debugLogger.logRequest(
@@ -185,7 +217,22 @@ class Router {
           route.target_url,
           'http_error',
           httpResult.error,
-          Date.now() - startTime,
+          duration,
+          transformedPayload
+        );
+        
+        fileLogger.logRequest(
+          req.request_id,
+          req,
+          payload,
+          route.name || 'unnamed',
+          route.target_url,
+          'success',
+          'forwarding_error',
+          500,
+          duration,
+          httpResult.error,
+          httpResult.errorCode || null,
           transformedPayload
         );
         
@@ -200,7 +247,22 @@ class Router {
         route.target_url,
         status,
         null,
-        Date.now() - startTime,
+        duration,
+        transformedPayload
+      );
+      
+      fileLogger.logRequest(
+        req.request_id,
+        req,
+        payload,
+        route.name || 'unnamed',
+        route.target_url,
+        'success',
+        status,
+        httpResult.status,
+        duration,
+        null,
+        null,
         transformedPayload
       );
 
@@ -250,18 +312,21 @@ class Router {
 
     } catch (error) {
       let errorMessage = 'HTTP request failed';
+      let errorCode = error.code || null;
       
       if (error.code === 'ECONNABORTED') {
         errorMessage = 'Request timeout';
       } else if (error.response) {
         errorMessage = `HTTP ${error.response.status}: ${error.response.statusText}`;
+        errorCode = `HTTP_${error.response.status}`;
       } else if (error.request) {
         errorMessage = 'No response from target';
+        errorCode = 'NO_RESPONSE';
       } else {
         errorMessage = error.message;
       }
 
-      return { success: false, error: errorMessage };
+      return { success: false, error: errorMessage, errorCode };
     }
   }
 
@@ -273,6 +338,7 @@ class Router {
    * @param {Object} meta - Request metadata
    */
   async handleUnmatchedEvent(req, res, payload, meta) {
+    const startTime = Date.now();
     const eventName = getEventName(payload);
     
     // Log unmatched event if enabled
@@ -293,8 +359,25 @@ class Router {
       }
     }
 
+    const duration = Date.now() - startTime;
+    const unmatchedMessage = `No route matched event: ${eventName}`;
+
     // Log as unmatched in debug
-    debugLogger.logRequest(req, payload, null, null, 'unmatched', `No route matched event: ${eventName}`);
+    debugLogger.logRequest(req, payload, null, null, 'unmatched', unmatchedMessage);
+    
+    // Log to file
+    fileLogger.logRequest(
+      req.request_id,
+      req,
+      payload,
+      null,
+      null,
+      'no_match',
+      'unmatched',
+      200,
+      duration,
+      unmatchedMessage
+    );
     
     // Return 200 OK for unmatched events (as per spec)
     res.status(200).json({ status: 'unmatched', event: eventName });

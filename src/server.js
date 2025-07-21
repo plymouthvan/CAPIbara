@@ -2,6 +2,8 @@ const express = require('express');
 const config = require('./config');
 const router = require('./router');
 const debugLogger = require('./debug');
+const fileLogger = require('./file-logger');
+const { requestIdMiddleware } = require('./middleware');
 
 class Server {
   constructor() {
@@ -12,6 +14,9 @@ class Server {
   }
 
   initializeComponents() {
+    // Initialize file logger first
+    fileLogger.initialize();
+    
     // Initialize debug logger
     debugLogger.initialize();
     
@@ -20,13 +25,16 @@ class Server {
   }
 
   setupMiddleware() {
+    // Generate request IDs for correlation
+    this.app.use(requestIdMiddleware);
+    
     // Parse JSON bodies
     this.app.use(express.json({ limit: '10mb' }));
     
     // Basic request logging
     this.app.use((req, res, next) => {
       if (config.isDebugLogging()) {
-        console.log(`${new Date().toISOString()} ${req.method} ${req.path} from ${this.getClientIP(req)}`);
+        console.log(`${new Date().toISOString()} [${req.request_id}] ${req.method} ${req.path} from ${this.getClientIP(req)}`);
       }
       next();
     });
@@ -120,6 +128,13 @@ class Server {
       console.log(`CAPIbara server listening on port ${port}`);
       console.log(`Debug logging: ${config.isDebugLogging() ? 'enabled' : 'disabled'}`);
       console.log(`Debug max entries: ${config.getDebugMaxEntries()}`);
+      console.log(`File logging: ${fileLogger.isActive() ? 'enabled' : 'disabled'}`);
+      if (fileLogger.isActive()) {
+        console.log(`File log directory: ${fileLogger.getLogDirectory()}`);
+      }
+      if (config.isTestMode()) {
+        console.log(`Test mode: enabled`);
+      }
     });
 
     return this.server;
@@ -129,6 +144,8 @@ class Server {
     if (this.server) {
       this.server.close();
     }
+    // Graceful shutdown of file logger
+    fileLogger.shutdown();
   }
 }
 
