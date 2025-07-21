@@ -172,6 +172,148 @@ function deepClone(obj) {
   return cloned;
 }
 
+/**
+ * Normalize GET request query parameters into GA4-compatible JSON payload
+ * @param {Object} query - Express req.query object
+ * @returns {Object} Normalized GA4 payload structure
+ */
+function normalizeGetPayload(query) {
+  // Start with basic GA4 structure
+  const payload = {
+    client_id: query.cid || query.client_id || 'unknown',
+    events: []
+  };
+
+  // Handle measurement_id if present
+  if (query.tid || query.measurement_id) {
+    payload.measurement_id = query.tid || query.measurement_id;
+  }
+
+  // Handle user_id if present
+  if (query.uid || query.user_id) {
+    payload.user_id = query.uid || query.user_id;
+  }
+
+  // Handle timestamp_micros if present
+  if (query.tm || query.timestamp_micros) {
+    payload.timestamp_micros = parseInt(query.tm || query.timestamp_micros) || getCurrentTimestamp() * 1000000;
+  }
+
+  // Handle user_properties if present
+  if (query.up) {
+    try {
+      payload.user_properties = typeof query.up === 'string' ? JSON.parse(query.up) : query.up;
+    } catch (error) {
+      // If parsing fails, skip user_properties
+    }
+  }
+
+  // Create event from query parameters
+  const event = {
+    name: query.en || query.event_name || 'page_view',
+    params: {}
+  };
+
+  // Map common GA4 parameters
+  const parameterMappings = {
+    // Event parameters
+    ep: 'custom_parameter',
+    epn: 'custom_parameter', // Custom parameter (numeric)
+    
+    // E-commerce parameters
+    ti: 'transaction_id',
+    ta: 'affiliation',
+    tr: 'value',
+    tt: 'tax',
+    ts: 'shipping',
+    tcc: 'coupon',
+    
+    // Item parameters
+    in: 'item_name',
+    ic: 'item_category',
+    iv: 'item_variant',
+    ib: 'item_brand',
+    ip: 'price',
+    iq: 'quantity',
+    
+    // Page parameters
+    dt: 'page_title',
+    dl: 'page_location',
+    dp: 'page_path',
+    dr: 'page_referrer',
+    
+    // Campaign parameters
+    cn: 'campaign_name',
+    cs: 'campaign_source',
+    cm: 'campaign_medium',
+    ck: 'campaign_keyword',
+    cc: 'campaign_content',
+    ci: 'campaign_id',
+    
+    // Custom dimensions and metrics
+    cd: 'custom_dimension',
+    cm: 'custom_metric'
+  };
+
+  // Process all query parameters
+  for (const [key, value] of Object.entries(query)) {
+    // Skip already processed parameters
+    if (['cid', 'client_id', 'tid', 'measurement_id', 'uid', 'user_id', 'tm', 'timestamp_micros', 'up', 'en', 'event_name'].includes(key)) {
+      continue;
+    }
+
+    // Handle custom parameters (ep.*, epn.*)
+    if (key.startsWith('ep.')) {
+      const paramName = key.substring(3);
+      event.params[paramName] = value;
+      continue;
+    }
+
+    if (key.startsWith('epn.')) {
+      const paramName = key.substring(4);
+      event.params[paramName] = parseFloat(value) || 0;
+      continue;
+    }
+
+    // Handle custom dimensions (cd1, cd2, etc.)
+    if (key.match(/^cd\d+$/)) {
+      const dimensionIndex = key.substring(2);
+      event.params[`custom_dimension_${dimensionIndex}`] = value;
+      continue;
+    }
+
+    // Handle custom metrics (cm1, cm2, etc.)
+    if (key.match(/^cm\d+$/)) {
+      const metricIndex = key.substring(2);
+      event.params[`custom_metric_${metricIndex}`] = parseFloat(value) || 0;
+      continue;
+    }
+
+    // Map known parameters
+    if (parameterMappings[key]) {
+      event.params[parameterMappings[key]] = value;
+      continue;
+    }
+
+    // Add unmapped parameters as-is
+    event.params[key] = value;
+  }
+
+  // Convert numeric string values where appropriate
+  const numericParams = ['value', 'tax', 'shipping', 'price', 'quantity'];
+  for (const param of numericParams) {
+    if (event.params[param] && typeof event.params[param] === 'string') {
+      const numValue = parseFloat(event.params[param]);
+      if (!isNaN(numValue)) {
+        event.params[param] = numValue;
+      }
+    }
+  }
+
+  payload.events.push(event);
+  return payload;
+}
+
 module.exports = {
   getClientIP,
   getCurrentTimestamp,
@@ -181,5 +323,6 @@ module.exports = {
   matchesWildcard,
   sortRoutesByPriority,
   createErrorResponse,
-  deepClone
+  deepClone,
+  normalizeGetPayload
 };

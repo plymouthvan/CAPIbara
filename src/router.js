@@ -10,7 +10,8 @@ const {
   matchesWildcard, 
   sortRoutesByPriority,
   createRequestMeta,
-  deepClone
+  deepClone,
+  normalizeGetPayload
 } = require('./utils');
 
 class Router {
@@ -38,6 +39,29 @@ class Router {
   }
 
   /**
+   * Validate that the request method is allowed by at least one route
+   * @param {Object} req - Express request object
+   * @param {Array} routes - Array of routes to check
+   * @returns {Object} Validation result
+   */
+  validateRequestMethod(req, routes) {
+    const requestMethod = req.method;
+    const hasValidRoute = routes.some(route => 
+      route.methods && route.methods.includes(requestMethod)
+    );
+    
+    if (!hasValidRoute) {
+      return {
+        valid: false,
+        error: `Method ${requestMethod} not allowed`,
+        allowedMethods: [...new Set(routes.flatMap(r => r.methods || ['POST']))]
+      };
+    }
+    
+    return { valid: true };
+  }
+
+  /**
    * Process an incoming request
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
@@ -45,9 +69,56 @@ class Router {
   async processRequest(req, res) {
     const startTime = Date.now();
     const meta = createRequestMeta(req);
-    const payload = req.body;
-
+    
     try {
+      // Get all routes that could potentially match
+      const allRoutes = [...this.routes];
+      if (this.fallbackRoute) allRoutes.push(this.fallbackRoute);
+      
+      // Validate method is allowed by at least one route
+      const methodValidation = this.validateRequestMethod(req, allRoutes);
+      if (!methodValidation.valid) {
+        const duration = Date.now() - startTime;
+        
+        // Log method rejection
+        debugLogger.logRequest(req, null, null, null, 'method_not_allowed', methodValidation.error);
+        fileLogger.logRequest(
+          req.request_id,
+          req,
+          null,
+          null,
+          null,
+          'method_rejected',
+          'method_not_allowed',
+          405,
+          duration,
+          methodValidation.error
+        );
+        
+        return res.status(405)
+          .set('Allow', methodValidation.allowedMethods.join(', '))
+          .json({ error: 'Method Not Allowed' });
+      }
+
+      // Normalize payload based on request method
+      let payload;
+      let payloadSource;
+      let sourceType;
+      
+      if (req.method === 'GET') {
+        payload = normalizeGetPayload(req.query);
+        payloadSource = 'query';
+        sourceType = 'GTM_GET';
+      } else {
+        payload = req.body;
+        payloadSource = 'body';
+        sourceType = 'STANDARD_POST';
+      }
+
+      // Add source metadata to request for logging
+      req.payload_source = payloadSource;
+      req.source_type = sourceType;
+
       // Validate payload structure
       if (!isValidGA4Payload(payload)) {
         const error = 'Invalid payload: missing events[0].name';
@@ -71,7 +142,7 @@ class Router {
       }
 
       const eventName = getEventName(payload);
-      const matchingRoutes = this.findMatchingRoutes(eventName);
+      const matchingRoutes = this.findMatchingRoutes(eventName, req.method);
 
       if (matchingRoutes.length === 0) {
         return await this.handleUnmatchedEvent(req, res, payload, meta);
@@ -96,7 +167,7 @@ class Router {
 
     } catch (error) {
       console.error('Router error:', error);
-      debugLogger.logRequest(req, payload, null, null, 'router_error', error.message);
+      debugLogger.logRequest(req, req.body || null, null, null, 'router_error', error.message);
       res.status(500).json({ 
         error: config.isDebugLogging() ? error.message : 'Internal Server Error' 
       });
@@ -104,15 +175,17 @@ class Router {
   }
 
   /**
-   * Find routes that match the given event name
+   * Find routes that match the given event name and HTTP method
    * @param {string} eventName - Name of the event to match
+   * @param {string} method - HTTP method to match
    * @returns {Array} Array of matching routes
    */
-  findMatchingRoutes(eventName) {
+  findMatchingRoutes(eventName, method) {
     const matching = [];
     
     for (const route of this.routes) {
-      if (matchesWildcard(route.event_match, eventName)) {
+      if (matchesWildcard(route.event_match, eventName) && 
+          route.methods && route.methods.includes(method)) {
         matching.push(route);
         
         // If multi is not enabled, only return the first match
@@ -400,7 +473,7 @@ class Router {
       }
 
       const eventName = getEventName(payload);
-      const matchingRoutes = this.findMatchingRoutes(eventName);
+      const matchingRoutes = this.findMatchingRoutes(eventName, req.method);
 
       if (matchingRoutes.length === 0) {
         return res.json({ matched_routes: [] });

@@ -137,6 +137,14 @@ class Config {
         }
       }
 
+      // Validate methods array if specified
+      if (route.methods !== undefined) {
+        this._validateMethods(route.methods, routeIndex);
+      } else {
+        // Default to POST only for backward compatibility
+        route.methods = ['POST'];
+      }
+
       // Validate template exists if specified
       if (route.template) {
         this._validateTemplate(route.template, routeIndex);
@@ -187,6 +195,29 @@ class Config {
         break;
       default:
         throw new Error(`Route ${routeIndex}: unknown auth type "${type}"`);
+    }
+  }
+
+  _validateMethods(methods, routeIndex) {
+    if (!Array.isArray(methods)) {
+      throw new Error(`Route ${routeIndex}: methods must be an array`);
+    }
+    
+    if (methods.length === 0) {
+      throw new Error(`Route ${routeIndex}: methods array cannot be empty`);
+    }
+    
+    const validMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+    const invalidMethods = methods.filter(method => !validMethods.includes(method));
+    
+    if (invalidMethods.length > 0) {
+      throw new Error(`Route ${routeIndex}: invalid methods: ${invalidMethods.join(', ')}. Valid methods are: ${validMethods.join(', ')}`);
+    }
+    
+    // Check for duplicates
+    const uniqueMethods = [...new Set(methods)];
+    if (uniqueMethods.length !== methods.length) {
+      throw new Error(`Route ${routeIndex}: duplicate methods found in array`);
     }
   }
 
@@ -272,6 +303,10 @@ class Config {
 
   isTestMode() {
     return this.testMode;
+  }
+
+  getGtmEndpoint() {
+    return process.env.GTM_ENDPOINT || '/g/collect';
   }
 }
 

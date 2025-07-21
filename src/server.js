@@ -50,10 +50,29 @@ class Server {
       });
     });
 
-    // Main event collection endpoint
-    this.app.post('/g/collect', (req, res) => {
+    // Get configurable GTM endpoint
+    const gtmEndpoint = config.getGtmEndpoint();
+    
+    // Register handlers for GTM endpoint
+    // POST is always available (backward compatibility)
+    this.app.post(gtmEndpoint, (req, res) => {
       this.handleEventCollection(req, res);
     });
+    
+    // GET is only registered if at least one route supports it
+    const routes = config.getRoutes();
+    const supportsGet = routes.some(route => 
+      route.methods && route.methods.includes('GET')
+    );
+    
+    if (supportsGet) {
+      this.app.get(gtmEndpoint, (req, res) => {
+        this.handleEventCollection(req, res);
+      });
+      console.log(`✓ GET support enabled for ${gtmEndpoint}`);
+    } else {
+      console.log(`✓ GET support disabled for ${gtmEndpoint} (no routes configured)`);
+    }
 
     // Debug endpoint
     this.app.get('/debug', (req, res) => {

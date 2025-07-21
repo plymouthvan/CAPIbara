@@ -1,12 +1,23 @@
 {
   "routes": [
     {
+      "name": "gtm-ingest",
+      "event_match": "*",
+      "target_url": "{{N8N_WEBHOOK_URL}}",
+      "methods": ["GET", "POST"],
+      "priority": 1,
+      "auth": {
+        "type": "whitelist",
+        "origins": ["https://tagmanager.google.com", "https://www.googletagmanager.com", "https://example.com"]
+      }
+    },
+    {
       "name": "send-to-meta",
       "event_match": "purchase",
       "target_url": "https://graph.facebook.com/v18.0/{{META_PIXEL_ID}}/events",
-      "method": "POST",
+      "methods": ["POST"],
       "template": "meta.json",
-      "priority": 1,
+      "priority": 2,
       "auth": {
         "type": "apikey",
         "key": "{{MY_PRIVATE_KEY}}"
@@ -19,9 +30,9 @@
       "name": "send-to-ga4",
       "event_match": "purchase",
       "target_url": "https://www.google-analytics.com/mp/collect?measurement_id={{GA4_MEASUREMENT_ID}}&api_secret={{GA4_API_SECRET}}",
-      "method": "POST",
+      "methods": ["POST"],
       "template": "ga4.json",
-      "priority": 2,
+      "priority": 3,
       "multi": true,
       "auth": {
         "type": "whitelist",
@@ -29,21 +40,10 @@
       }
     },
     {
-      "name": "forward-to-n8n",
-      "event_match": "*",
-      "target_url": "{{N8N_WEBHOOK_URL}}",
-      "method": "POST",
-      "priority": 10,
-      "auth": {
-        "type": "ip_whitelist",
-        "allowed_ips": ["203.0.113.1", "203.0.113.2"]
-      }
-    },
-    {
       "name": "catch-all-fallback",
       "event_match": "*",
       "target_url": "{{ZAPIER_WEBHOOK_URL}}",
-      "method": "POST",
+      "methods": ["POST"],
       "fallback": true,
       "auth": {
         "type": "apikey",
