@@ -1,6 +1,73 @@
-# Template System – CAPIbara
+# CAPIbara
 
-CAPIbara uses a JSON-based templating system to transform incoming GA4-style event data into platform-specific formats (e.g. Meta CAPI, GA4 Measurement Protocol). Templates are external files defined in environment variables and can be modified without changing application logic.
+CAPIbara is a JSON-based templating system designed to transform incoming GA4-style event data into platform-specific formats for services like Meta Conversions API, GA4 Measurement Protocol, and other webhook endpoints. It acts as a powerful middleware layer that receives analytics events from your website and intelligently routes them to multiple destinations with custom transformations.
+
+## 🎯 Purpose & Use Cases
+
+CAPIbara solves the common challenge of sending the same analytics event to multiple platforms that each require different data formats. Instead of implementing complex client-side logic or managing multiple tracking implementations, CAPIbara provides a single endpoint that can:
+
+- **Transform GA4 events** into Meta Conversions API format for server-side tracking
+- **Forward events** to automation platforms like n8n, Zapier, or Make
+- **Route events** to multiple destinations simultaneously with different transformations
+- **Authenticate requests** using various strategies (API keys, origin whitelists, IP restrictions)
+- **Debug and monitor** event processing with built-in logging and dry-run capabilities
+
+Common use cases include e-commerce conversion tracking, lead generation, customer journey analytics, and marketing automation workflows.
+
+## 📁 Project Structure
+
+```
+CAPIbara/
+├── index.js                 # Application entry point with startup validation
+├── package.json            # Node.js dependencies and scripts
+├── routes.json             # Route configuration (defines how events are processed)
+├── .env                    # Environment variables (not in repo)
+├── .env.example            # Environment variable template
+├── Dockerfile              # Container deployment configuration
+├── src/                    # Core application modules
+│   ├── server.js           # Express server setup and middleware
+│   ├── config.js           # Configuration loading and validation
+│   ├── router.js           # Route matching and processing logic
+│   ├── template-engine.js  # JSON template processing with token substitution
+│   ├── auth.js             # Authentication strategies (API key, whitelist, IP)
+│   ├── debug.js            # Debug logging and monitoring
+│   └── utils.js            # Utility functions
+└── templates/              # JSON transformation templates
+    ├── meta.json           # Meta Conversions API template
+    └── ga4.json            # GA4 Measurement Protocol template
+```
+
+## 🚀 Quick Start
+
+1. **Clone and install dependencies:**
+   ```bash
+   git clone https://github.com/plymouthvan/CAPIbara.git
+   cd CAPIbara
+   npm install
+   ```
+
+2. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your settings
+   ```
+
+3. **Set up routes:**
+   ```bash
+   cp routes.json.example routes.json
+   # Edit routes.json with your destinations
+   ```
+
+4. **Run the application:**
+   ```bash
+   node index.js
+   ```
+
+Your CAPIbara server will be running on `http://localhost:8080` with endpoints:
+- `POST /g/collect` - Main event collection endpoint
+- `POST /dry-run` - Test transformations without sending data
+- `GET /debug` - View recent events and processing logs
+- `GET /health` - Health check endpoint
 
 ## 🔧 Template Format
 
@@ -13,30 +80,6 @@ Templates are standard JSON files. Fields can contain:
 > **Note:** Only simple path-based substitution and a single-level fallback using `||` are supported. No nested expressions, functions, or arbitrary JavaScript are allowed inside tokens. Only one `||` fallback per token. Anything beyond this is invalid and will cause a startup error.
 
 The app recursively resolves all template fields using the incoming event payload.
-
-## 📦 Passthrough Mode
-
-In addition to templated transformation, CAPIbara supports a passthrough mode for raw forwarding of JSON payloads. This is useful for integrations with systems like n8n, Zapier, or Make where transformation is handled elsewhere or unnecessary.
-
-While the system is optimized for GA4-style events, any well-formed JSON payload will be accepted and forwarded as-is.
-
-
-To enable passthrough, omit the `template` field in a route definition inside `routes.json`. CAPIbara will detect the absence of a template and forward the request body unaltered to the `target_url`.
-
-> **Note:** Passthrough mode is enabled only when the `template` field is completely absent from the route definition. Setting `template` to `null`, an empty string, or any other value will not enable passthrough mode.
-
-```json
-{
-  "routes": [
-    {
-      "name": "send-to-n8n-as-is",
-      "event_match": "*",
-      "target_url": "https://automate.example.com/webhook/ga4-ingest",
-      "method": "POST"
-    }
-  ]
-}
-```
 
 ## 🧩 Input Data Available
 
@@ -56,53 +99,34 @@ To enable passthrough, omit the `template` field in a route definition inside `r
 
 > **Note:** Only single-level fallback using `||` is supported inside tokens. Chained logic, ternary operations, or any additional JavaScript-like syntax is not allowed.
 
-## 📄 Example Files
+## 📦 Passthrough Mode
 
-- [`meta.json`](./meta.json) – Template for Meta Conversions API payload
-- [`ga4.json`](./ga4.json) – Template for GA4 Measurement Protocol forwarding
+In addition to templated transformation, CAPIbara supports a passthrough mode for raw forwarding of JSON payloads. This is useful for integrations with systems like n8n, Zapier, or Make where transformation is handled elsewhere or unnecessary.
 
-## 🔐 Route Authentication
+While the system is optimized for GA4-style events, any well-formed JSON payload will be accepted and forwarded as-is.
 
-To prevent abuse and unauthorized use, each route in `routes.json` must define its authentication strategy. Authentication is required.
+To enable passthrough, omit the `template` field in a route definition inside `routes.json`. CAPIbara will detect the absence of a template and forward the request body unaltered to the `target_url`.
 
-Supported strategies:
+> **Note:** Passthrough mode is enabled only when the `template` field is completely absent from the route definition. Setting `template` to `null`, an empty string, or any other value will not enable passthrough mode.
 
-- `"auth": { "type": "whitelist", "origins": ["https://example.com"] }` – Origin-based
-- `"auth": { "type": "apikey", "key": "expected-api-key" }` – Header-based
-- `"auth": { "type": "ip_whitelist", "allowed_ips": [...] }` – IP-based
-
-
-Only one authentication strategy may be specified per route. If more than one is provided, the server exits with an error.
-
-> **Note:** If more than one authentication strategy is provided on a route, the server will fail to start and exit with an error message indicating the conflicting strategies. A route is considered invalid if its `auth` block contains multiple strategy types, missing required fields for the chosen strategy, or unknown strategy types. All such errors are fatal at startup and must be logged clearly.
-
-If `auth` is missing or invalid on a route, the request will be rejected with a 403 response.
-
-Authentication is designed to be flexible and composable. You can define global environment variables for API keys or secrets (e.g., `MY_PRIVATE_KEY=abc123` in `.env`) and reference them in routes using `{{MY_PRIVATE_KEY}}`.
-
-Example route with authentication:
 ```json
 {
-  "name": "forward-to-n8n",
-  "event_match": "*",
-  "target_url": "https://automate.example.com/webhook/ga4-ingest",
-  "method": "POST",
-  "auth": {
-    "type": "apikey",
-    "key": "{{MY_PRIVATE_KEY}}"
-  }
+  "routes": [
+    {
+      "name": "send-to-n8n-as-is",
+      "event_match": "*",
+      "target_url": "https://automate.example.com/webhook/ga4-ingest",
+      "method": "POST"
+    }
+  ]
 }
 ```
-
-- When using `"auth": { "type": "whitelist", "origins": [...] }`, the server must enforce access based on the HTTP `Origin` header.
-- If the `Origin` header is missing or does not match, respond with 403 Forbidden and log the attempt.
-- For IP-based access control, use `"auth": { "type": "ip_whitelist", "allowed_ips": [...] }`.
 
 ## 🔀 Routing Behavior
 
 Route and template files are read once at server startup. Any modification requires a server restart to take effect.
 
-CAPIbara uses `routes.json` to determine how to handle incoming events. Here’s how routing works in practice:
+CAPIbara uses `routes.json` to determine how to handle incoming events. Here's how routing works in practice:
 
 ### 🧭 Route Matching
 
@@ -122,7 +146,6 @@ This is useful when you want a single incoming event to trigger multiple routes 
   "multi": true
 }
 ```
-
 
 Routes are evaluated in the order listed in `routes.json`. For deterministic behavior, use `"priority"`:
 
@@ -188,103 +211,41 @@ Subdirectories are supported:
 "template": "meta/standard.json"
 ```
 
----
+## 🔐 Route Authentication
 
-### 🛑 Template and Route File Validity
+To prevent abuse and unauthorized use, each route in `routes.json` must define its authentication strategy. Authentication is required.
 
-- If a required template or route file is missing, malformed, or unreadable at startup, the application must log a clear error and exit.
+Supported strategies:
 
-  > **Note:** "Malformed" means invalid JSON syntax or missing required keys in the template or route files. "Unreadable" means the file path does not exist or the file cannot be accessed due to permissions. All such errors are fatal at startup and must be logged explicitly.
+- `"auth": { "type": "whitelist", "origins": ["https://example.com"] }` – Origin-based
+- `"auth": { "type": "apikey", "key": "expected-api-key" }` – Header-based
+- `"auth": { "type": "ip_whitelist", "allowed_ips": [...] }` – IP-based
 
-- If a template or route file fails to parse as valid JSON at startup, the server logs an error and exits. If a referenced template cannot be loaded at runtime (due to file deletion or corruption), the route is skipped and the error logged in `/debug`.
+Only one authentication strategy may be specified per route. If more than one is provided, the server exits with an error.
 
-  > **Note:** Runtime errors loading templates should not crash the server but must be logged in `/debug` with enough detail to diagnose the issue.
+> **Note:** If more than one authentication strategy is provided on a route, the server will fail to start and exit with an error message indicating the conflicting strategies. A route is considered invalid if its `auth` block contains multiple strategy types, missing required fields for the chosen strategy, or unknown strategy types. All such errors are fatal at startup and must be logged clearly.
 
-## 🧪 Debugging
+If `auth` is missing or invalid on a route, the request will be rejected with a 403 response.
 
-- Use `DEBUG_LOGGING=true` in `.env` to print resolved template output
-- `/debug` endpoint (v1): Returns the most recent resolved events and their transformed payloads. Each entry includes:
-  - What was received and from where (source IP and endpoint)
-  - What was sent and to where (target URL and transformed body)
-  - Resolution status and timestamps
+Authentication is designed to be flexible and composable. You can define global environment variables for API keys or secrets (e.g., `MY_PRIVATE_KEY=abc123` in `.env`) and reference them in routes using `{{MY_PRIVATE_KEY}}`.
 
-### 🔁 Debug Log Persistence
-
-Debug logs are held in memory by default. You can control their behavior via environment variables:
-
-- `DEBUG_MAX_ENTRIES=100` — Maximum number of recent debug entries to retain in memory (default: 100)
-- `DEBUG_LOGGING=false` — Disables debug logging entirely (useful for production performance)
-
-These options help balance observability and performance depending on the deployment context.
-
-
-If `DEBUG_MAX_ENTRIES` < 1, debug log retention is disabled. If greater than 1000, only the 1000 most recent entries are retained.
-
-> **Note:**  
-> - If `DEBUG_MAX_ENTRIES` is set to 0 or any negative value, no debug entries are retained in memory.  
-> - If `DEBUG_MAX_ENTRIES` is greater than 1000, only the 1000 most recent entries are kept.  
-> - Any non-integer or invalid value will cause the application to log a startup error and exit.
-
-### Example Response:
-```json
-[
-  {
-    "timestamp": 1723484321,
-    "source_ip": "203.0.113.1",
-    "source_path": "/g/collect",
-    "route": "send-to-meta",
-    "original_payload": { ... },
-    "transformed_payload": { ... },
-    "target_url": "https://graph.facebook.com/v18.0/<pixel-id>/events",
-    "status": "success"
-  },
-  {
-    "timestamp": 1723484335,
-    "source_ip": "203.0.113.2",
-    "source_path": "/g/collect",
-    "route": "send-to-n8n-as-is",
-    "original_payload": { ... },
-    "transformed_payload": null,
-    "target_url": "https://automate.example.com/webhook/ga4-ingest",
-    "status": "passthrough"
-  }
-]
-```
-
-### Example: Meta Template (`meta.json`)
+Example route with authentication:
 ```json
 {
-  "event_name": "{{events.0.name}}",
-  "event_time": "{{meta.timestamp}}",
-  "action_source": "website",
-  "event_source_url": "{{page_location}}",
-  "user_data": {
-    "client_user_agent": "{{meta.user_agent}}",
-    "client_ip_address": "{{meta.ip}}",
-    "em": "{{user_properties.email}}"
-  },
-  "custom_data": {
-    "value": "{{events.0.params.value}}",
-    "currency": "{{events.0.params.currency || 'USD'}}"
+  "name": "forward-to-n8n",
+  "event_match": "*",
+  "target_url": "https://automate.example.com/webhook/ga4-ingest",
+  "method": "POST",
+  "auth": {
+    "type": "apikey",
+    "key": "{{MY_PRIVATE_KEY}}"
   }
 }
 ```
 
-### Example: GA4 Template (`ga4.json`)
-```json
-{
-  "client_id": "{{client_id}}",
-  "events": [
-    {
-      "name": "{{events.0.name}}",
-      "params": {
-        "value": "{{events.0.params.value}}",
-        "currency": "{{events.0.params.currency || 'USD'}}"
-      }
-    }
-  ]
-}
-```
+- When using `"auth": { "type": "whitelist", "origins": [...] }`, the server must enforce access based on the HTTP `Origin` header.
+- If the `Origin` header is missing or does not match, respond with 403 Forbidden and log the attempt.
+- For IP-based access control, use `"auth": { "type": "ip_whitelist", "allowed_ips": [...] }`.
 
 ## 🧪 Template Testing & Dry Run
 
@@ -326,6 +287,66 @@ curl -X POST http://localhost:8080/dry-run \
 
 No data is sent to any third-party during a dry-run request. This is a safe, repeatable utility for development, QA, or debugging.
 
+## 🧪 Debugging
+
+- Use `DEBUG_LOGGING=true` in `.env` to print resolved template output
+- `/debug` endpoint (v1): Returns the most recent resolved events and their transformed payloads. Each entry includes:
+  - What was received and from where (source IP and endpoint)
+  - What was sent and to where (target URL and transformed body)
+  - Resolution status and timestamps
+
+### 🔁 Debug Log Persistence
+
+Debug logs are held in memory by default. You can control their behavior via environment variables:
+
+- `DEBUG_MAX_ENTRIES=100` — Maximum number of recent debug entries to retain in memory (default: 100)
+- `DEBUG_LOGGING=false` — Disables debug logging entirely (useful for production performance)
+
+These options help balance observability and performance depending on the deployment context.
+
+If `DEBUG_MAX_ENTRIES` < 1, debug log retention is disabled. If greater than 1000, only the 1000 most recent entries are retained.
+
+> **Note:**  
+> - If `DEBUG_MAX_ENTRIES` is set to 0 or any negative value, no debug entries are retained in memory.  
+> - If `DEBUG_MAX_ENTRIES` is greater than 1000, only the 1000 most recent entries are kept.  
+> - Any non-integer or invalid value will cause the application to log a startup error and exit.
+
+### Example Response:
+```json
+[
+  {
+    "timestamp": 1723484321,
+    "source_ip": "203.0.113.1",
+    "source_path": "/g/collect",
+    "route": "send-to-meta",
+    "original_payload": { ... },
+    "transformed_payload": { ... },
+    "target_url": "https://graph.facebook.com/v18.0/<pixel-id>/events",
+    "status": "success"
+  },
+  {
+    "timestamp": 1723484335,
+    "source_ip": "203.0.113.2",
+    "source_path": "/g/collect",
+    "route": "send-to-n8n-as-is",
+    "original_payload": { ... },
+    "transformed_payload": null,
+    "target_url": "https://automate.example.com/webhook/ga4-ingest",
+    "status": "passthrough"
+  }
+]
+```
+
+### 🛑 Template and Route File Validity
+
+- If a required template or route file is missing, malformed, or unreadable at startup, the application must log a clear error and exit.
+
+  > **Note:** "Malformed" means invalid JSON syntax or missing required keys in the template or route files. "Unreadable" means the file path does not exist or the file cannot be accessed due to permissions. All such errors are fatal at startup and must be logged explicitly.
+
+- If a template or route file fails to parse as valid JSON at startup, the server logs an error and exits. If a referenced template cannot be loaded at runtime (due to file deletion or corruption), the route is skipped and the error logged in `/debug`.
+
+  > **Note:** Runtime errors loading templates should not crash the server but must be logged in `/debug` with enough detail to diagnose the issue.
+
 ## 🚀 Deployment & CLI Usage
 
 You can run CAPIbara either via Node directly or using Docker (recommended).
@@ -361,3 +382,42 @@ node index.js
 All paths inside `routes.json` are relative to `/templates/`.
 
 Outgoing requests always use HTTP POST. If the `headers` field is not set in a route, `Content-Type: application/json` is used for outgoing requests by default.
+
+## 📄 Example Files
+
+- [`meta.json`](./templates/meta.json) – Template for Meta Conversions API payload
+- [`ga4.json`](./templates/ga4.json) – Template for GA4 Measurement Protocol forwarding
+
+### Example: Meta Template (`meta.json`)
+```json
+{
+  "event_name": "{{events.0.name}}",
+  "event_time": "{{meta.timestamp}}",
+  "action_source": "website",
+  "event_source_url": "{{page_location}}",
+  "user_data": {
+    "client_user_agent": "{{meta.user_agent}}",
+    "client_ip_address": "{{meta.ip}}",
+    "em": "{{user_properties.email}}"
+  },
+  "custom_data": {
+    "value": "{{events.0.params.value}}",
+    "currency": "{{events.0.params.currency || 'USD'}}"
+  }
+}
+```
+
+### Example: GA4 Template (`ga4.json`)
+```json
+{
+  "client_id": "{{client_id}}",
+  "events": [
+    {
+      "name": "{{events.0.name}}",
+      "params": {
+        "value": "{{events.0.params.value}}",
+        "currency": "{{events.0.params.currency || 'USD'}}"
+      }
+    }
+  ]
+}
