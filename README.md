@@ -472,13 +472,48 @@ You can run CAPIbara either via Node directly or using Docker (recommended).
 
 ### 🐳 Docker
 
-Build and run using Docker:
+#### Using Pre-built Image from GitHub Container Registry
 
-A `Dockerfile` is included in the repository to support containerized deployments.
+The easiest way to run CAPIbara is using the pre-built Docker image:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/plymouthvan/capibara:latest
+
+# Run with your configuration files
+docker run -p 8080:8080 \
+  --env-file .env \
+  -v $(pwd)/routes.json:/app/routes.json \
+  -v $(pwd)/templates:/app/templates \
+  ghcr.io/plymouthvan/capibara:latest
+```
+
+#### Building Locally
+
+Alternatively, build and run using the included Dockerfile:
 
 ```bash
 docker build -t capibara .
 docker run -p 8080:8080 --env-file .env -v $(pwd)/routes.json:/app/routes.json -v $(pwd)/templates:/app/templates capibara
+```
+
+#### Docker Compose Example
+
+```yaml
+version: '3.8'
+services:
+  capibara:
+    image: ghcr.io/plymouthvan/capibara:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - DEBUG_LOGGING=true
+      - FILE_LOGGING_ENABLED=true
+    volumes:
+      - ./routes.json:/app/routes.json
+      - ./templates:/app/templates
+      - ./logs:/app/logs
+    restart: unless-stopped
 ```
 
 Ensure you mount your local `routes.json` and `/templates` directory into the container.
