@@ -1,5 +1,14 @@
 FROM node:18-alpine
 
+# Add metadata labels
+LABEL org.opencontainers.image.title="CAPIbara"
+LABEL org.opencontainers.image.description="JSON-based templating system for transforming GA4-style event data into platform-specific formats"
+LABEL org.opencontainers.image.source="https://github.com/plymouthvan/CAPIbara"
+LABEL org.opencontainers.image.url="https://github.com/plymouthvan/CAPIbara"
+LABEL org.opencontainers.image.documentation="https://github.com/plymouthvan/CAPIbara#readme"
+LABEL org.opencontainers.image.vendor="CAPIbara"
+LABEL org.opencontainers.image.licenses="MIT"
+
 # Set working directory
 WORKDIR /app
 
