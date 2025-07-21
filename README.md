@@ -575,3 +575,5 @@ Outgoing requests always use HTTP POST. If the `headers` field is not set in a r
     }
   ]
 }
+
+That is all. Maybe your events always be properly deduplicated.
